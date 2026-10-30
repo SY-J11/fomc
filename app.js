@@ -41,10 +41,8 @@ const rows = [
     {id:'wage',name:'시간당 평균 임금',source:'fred',ticker:'CES0500000003',unit:'달러',decimals:2},
     {id:'wageyoy',name:'전년 대비 상승률 (Average Hourly Earnings)',source:'fred',ticker:'CES0500000003',unit:'%',decimals:2,rateSeries:'yearOverYear',basisShort:'전년 대비',basisDescription:'Average Hourly Earnings · 전년 대비'}
   ]],
-  ['신규 실업수당 청구건수', [
-    {id:'icsa',name:'신규 실업수당 청구건수',source:'fred',ticker:'ICSA',unit:'건',decimals:0}
-  ]],
-  ['계속 실업수당 청구건수', [
+  ['실업수당 청구건수', [
+    {id:'icsa',name:'신규 실업수당 청구건수',source:'fred',ticker:'ICSA',unit:'건',decimals:0},
     {id:'ccsa',name:'계속 실업수당 청구건수',source:'fred',ticker:'CCSA',unit:'건',decimals:0}
   ]],
   ['구인·참가율', [
@@ -144,7 +142,7 @@ function makeSummary() {
   const root=$('summaryRows'); root.innerHTML='';
   rows.forEach(([group,items],index)=>{
     const line=document.createElement('div'); line.className='summary-row';
-    const metrics=document.createElement('div'); metrics.className=`metrics ${items.length===1?'single':items.length===2?'double':items.length===4?'quadruple':'triple'}`;
+    const metrics=document.createElement('div'); metrics.className=`metrics ${items.length===1?'single':items.length===2?'double':items.length===4?'quadruple':'triple'}${group==='실업수당 청구건수'?' claims-metrics':''}`;
     items.forEach(item=>{
       const chip=document.createElement('article'); chip.className='metric'; chip.dataset.summaryId=item.id;
       const top=document.createElement('div'); top.className='metric-top';
@@ -165,7 +163,7 @@ function makeCharts() {
     const section=document.createElement('section'); section.className='chart-group';
     const heading=document.createElement('div'); heading.className='section-heading group-heading';
     heading.innerHTML=`<div><span class="eyebrow">INDICATOR GROUP ${String(index+1).padStart(2,'0')}</span><h2>${group}</h2></div>`;
-    const grid=document.createElement('div'); grid.className='chart-grid';
+    const grid=document.createElement('div'); grid.className=`chart-grid${group==='실업수당 청구건수'?' claims-grid':''}`;
     items.forEach(item=>{
       const card=document.createElement('article'); card.className='chart-card';
       const head=document.createElement('div'); head.className='chart-head';
