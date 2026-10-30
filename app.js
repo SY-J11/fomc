@@ -10,9 +10,9 @@ const rows = [
     {id:'fedfunds',name:'기준금리',source:'fred',ticker:'FEDFUNDS',unit:'%',decimals:2}
   ]],
   ['국채금리', [
-    {id:'us2y',name:'2년물 국채금리',source:'fred',ticker:'DGS2',unit:'%',decimals:2},
-    {id:'us10y',name:'10년물 국채금리',source:'fred',ticker:'DGS10',unit:'%',decimals:2},
-    {id:'us30y',name:'30년물 국채금리',source:'fred',ticker:'DGS30',unit:'%',decimals:2}
+    {id:'us2y',name:'2년물 국채금리',source:'treasury',treasuryField:'BC_2YEAR',unit:'%',decimals:3},
+    {id:'us10y',name:'10년물 국채금리',source:'treasury',treasuryField:'BC_10YEAR',unit:'%',decimals:3},
+    {id:'us30y',name:'30년물 국채금리',source:'treasury',treasuryField:'BC_30YEAR',unit:'%',decimals:3}
   ]],
   ['기대 인플레이션', [
     {id:'t5yie',name:'5년 기대 인플레이션',source:'fred',ticker:'T5YIE',unit:'%',decimals:2},
@@ -125,7 +125,7 @@ function makeCharts() {
       const quote=document.createElement('div'); quote.className='chart-quote';
       quote.innerHTML='<strong class="chart-latest">—</strong><span class="chart-change neutral">데이터 조회 중</span><small class="chart-date"></small>';
       const area=document.createElement('div'); area.className='chart-area'; area.id=`chart-${item.id}`;
-      const foot=document.createElement('div'); foot.className='chart-foot'; foot.textContent=`${item.ticker} · ${item.source==='fred'?'FRED':'Yahoo Finance'}`;
+      const foot=document.createElement('div'); foot.className='chart-foot'; foot.textContent=item.source==='treasury'?`미국 재무부 일일 국채수익률 · ${item.treasuryField}`:`${item.ticker} · ${item.source==='fred'?'FRED':'Yahoo Finance'}`;
       card.append(head,quote,area,foot); grid.append(card); chartCards.set(item.id,card);
     });
     section.append(heading,grid); root.append(section);
@@ -155,6 +155,31 @@ async function fetchFred(item) {
     return {time:Math.floor(Date.parse(`${date}T00:00:00Z`)/1000),value:item.transform?item.transform(normalized):normalized,date};
   }).filter(Boolean);
   if(values.length<2) throw new Error('FRED 관측값 부족');
+  return values;
+}
+
+async function fetchTreasury(item) {
+  // 장전 체크리스트와 동일한 미국 재무부 공식 일일 수익률 자료를 사용합니다.
+  const year = new Date().getFullYear();
+  const target = `https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value=${year}`;
+  const response = await fetch(proxyUrl(target), {cache:'no-store', headers:{'Accept':'application/xml,text/xml,*/*'}});
+  if (!response.ok) {
+    let detail=''; try { detail=(await response.text()).slice(0,180); } catch {}
+    throw new Error(`미국 재무부 데이터 HTTP ${response.status}${detail?`: ${detail}`:''}`);
+  }
+  const xml = await response.text();
+  const doc = new DOMParser().parseFromString(xml, 'application/xml');
+  if (doc.querySelector('parsererror')) throw new Error('미국 재무부 XML 응답을 해석하지 못했습니다');
+  const entries = [...doc.getElementsByTagName('entry')];
+  const values = entries.map(entry => {
+    const dateNode = entry.getElementsByTagName('d:NEW_DATE')[0] || entry.getElementsByTagName('NEW_DATE')[0] || [...entry.getElementsByTagName('*')].find(node => node.localName === 'NEW_DATE');
+    const valueNode = [...entry.getElementsByTagName('*')].find(node => node.localName === item.treasuryField);
+    const date = (dateNode?.textContent || '').trim().slice(0,10);
+    const value = Number((valueNode?.textContent || '').trim());
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(value) || value <= 0) return null;
+    return {date, time:Math.floor(Date.parse(`${date}T00:00:00Z`)/1000), value};
+  }).filter(Boolean).sort((a,b)=>a.date.localeCompare(b.date));
+  if (values.length < 2) throw new Error(`${item.name} 미국 재무부 관측값 부족`);
   return values;
 }
 
@@ -225,7 +250,7 @@ async function refreshAll() {
   async function worker(){
     while(cursor<queue.length){
       const item=queue[cursor++];
-      try{const values=item.source==='fred'?await fetchFred(item):await fetchYahoo(item);renderItem(item,values);success++;}
+      try{const values=item.source==='fred'?await fetchFred(item):item.source==='treasury'?await fetchTreasury(item):await fetchYahoo(item);renderItem(item,values);success++;}
       catch(error){
         fail++;
         const message=String(error?.message||error);
