@@ -134,11 +134,26 @@ function makeCharts() {
 
 async function fetchFred(item) {
   const target=`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(item.ticker)}&cosd=2015-01-01`;
-  const response=await fetch(proxyUrl(target),{cache:'no-store'});
-  if(!response.ok) throw new Error(`FRED HTTP ${response.status}`);
-  const csv=await response.text();
+  // FRED가 Worker IP에 403/520을 반환하는 경우를 대비해 공개 CSV CORS 중계로 우선 조회하고,
+  // 실패하면 기존 Cloudflare Worker 경로를 재시도합니다.
+  const attempts=[
+    {url:`https://proxy.cors.dev/${target}`,label:'FRED 공개 CSV 중계'},
+    {url:proxyUrl(target),label:'기존 데이터 프록시'}
+  ];
+  let csv=null,errors=[];
+  for(const attempt of attempts){
+    try{
+      const response=await fetch(attempt.url,{cache:'no-store',headers:{'Accept':'text/csv,text/plain,*/*'}});
+      if(!response.ok) throw new Error(`HTTP ${response.status}`);
+      const text=await response.text();
+      if(!text.includes('observation_date') || text.trim().startsWith('<')) throw new Error('CSV 응답 형식 오류');
+      csv=text; break;
+    }catch(error){errors.push(`${attempt.label}: ${String(error.message||error)}`);}
+  }
+  if(!csv) throw new Error(errors.join(' / ')||'FRED 데이터 연결 실패');
   const values=csv.trim().split(/\r?\n/).slice(1).map(line=>{
-    const parts=line.split(','); const date=parts[0]; const value=Number(parts[1]);
+    const parts=line.split(','); const date=parts[0]; const raw=(parts[1]||'').trim();
+    const value=raw==='.'||raw===''?NaN:Number(raw);
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(value)) return null;
     return {time:Math.floor(Date.parse(`${date}T00:00:00Z`)/1000),value:item.transform?item.transform(value):value,date};
   }).filter(Boolean);
@@ -148,8 +163,15 @@ async function fetchFred(item) {
 
 async function fetchYahoo(item) {
   const target=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(item.ticker)}?range=5y&interval=1d&events=div%2Csplits`;
-  const response=await fetch(proxyUrl(target),{cache:'no-store'});
-  if(!response.ok) throw new Error(`Yahoo HTTP ${response.status}`);
+  let response=null,errors=[];
+  for(const attempt of [
+    {url:`https://proxy.cors.dev/${target}`,label:'Yahoo 공개 데이터 중계'},
+    {url:proxyUrl(target),label:'기존 데이터 프록시'}
+  ]){
+    try{const candidate=await fetch(attempt.url,{cache:'no-store',headers:{'Accept':'application/json,*/*'}});if(!candidate.ok)throw new Error(`HTTP ${candidate.status}`);response=candidate;break;}
+    catch(error){errors.push(`${attempt.label}: ${String(error.message||error)}`);}
+  }
+  if(!response) throw new Error(errors.join(' / ')||'Yahoo 데이터 연결 실패');
   const json=await response.json(); const result=json?.chart?.result?.[0];
   if(!result) throw new Error(json?.chart?.error?.description||'Yahoo 시계열 없음');
   const timestamps=result.timestamp||[]; const closes=result.indicators?.quote?.[0]?.close||[];
