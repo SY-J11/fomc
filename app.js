@@ -1,7 +1,7 @@
 'use strict';
 
 // FRED 시계열과 Yahoo Finance 일봉 데이터를 직접 받아 요약·차트를 그립니다.
-const PROXY_BASE = 'https://fomc.mcraft-tiger-574.workers.dev/';
+const PROXY_BASE = 'https://pmc.mcraft-tiger-574.workers.dev';
 const $ = id => document.getElementById(id);
 const blank = '—';
 
@@ -91,8 +91,7 @@ function makeSummary() {
   const root=$('summaryRows'); root.innerHTML='';
   rows.forEach(([group,items],index)=>{
     const line=document.createElement('div'); line.className='summary-row';
-    const number=document.createElement('div'); number.className='row-no'; number.textContent=String(index+1).padStart(2,'0');
-    const metrics=document.createElement('div'); metrics.className='metrics';
+    const metrics=document.createElement('div'); metrics.className=`metrics ${items.length===1?'single':items.length===2?'double':'triple'}`;
     items.forEach(item=>{
       const chip=document.createElement('article'); chip.className='metric'; chip.dataset.summaryId=item.id;
       const top=document.createElement('div'); top.className='metric-top';
@@ -103,7 +102,7 @@ function makeSummary() {
       const change=document.createElement('span'); change.className='metric-change neutral'; change.textContent='—';
       chip.append(top,value,change); metrics.append(chip);
     });
-    line.append(number,metrics); root.append(line);
+    line.append(metrics); root.append(line);
   });
 }
 
@@ -133,17 +132,13 @@ function makeCharts() {
 }
 
 async function fetchFred(item) {
-  const target=`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(item.ticker)}&cosd=2015-01-01`;
-  // FRED는 브라우저에서 직접 호출하지 않고, 업데이트된 Cloudflare Worker를 통해서만 조회합니다.
-  // Worker가 FRED 원본과 대체 중계 경로를 순서대로 시도합니다.
-  const response=await fetch(proxyUrl(target),{
-    cache:'no-store',
-    headers:{'Accept':'text/csv,text/plain,*/*'}
-  });
+  // FRED 전용 Worker 경로를 사용합니다. 전체 URL 허용목록 검사로 인한 403을 피합니다.
+  const endpoint=`${PROXY_BASE}/fred.csv?series=${encodeURIComponent(item.ticker)}&start=2015-01-01`;
+  const response=await fetch(endpoint,{cache:'no-store',headers:{'Accept':'text/csv,text/plain,*/*'}});
   if(!response.ok){
     let detail='';
-    try{detail=(await response.text()).slice(0,180);}catch{}
-    throw new Error(`데이터 프록시 HTTP ${response.status}${detail?`: ${detail}`:''}`);
+    try{detail=(await response.text()).slice(0,220);}catch{}
+    throw new Error(`FRED 데이터 연결 HTTP ${response.status}${detail?`: ${detail}`:''}`);
   }
   const csv=await response.text();
   if(!csv.includes('observation_date') || csv.trim().startsWith('<')) throw new Error('FRED CSV 응답 형식 오류');
