@@ -22,16 +22,16 @@ const rows = [
     {id:'t5yifr',name:'5년 후 5년 기대 인플레이션',source:'fred',ticker:'T5YIFR',unit:'%',decimals:2}
   ]],
   ['PCE', [
-    {id:'pce',name:'PCE',source:'fred',ticker:'PCEPI',unit:'지수',decimals:2},
-    {id:'corepce',name:'근원 PCE',source:'fred',ticker:'PCEPILFE',unit:'지수',decimals:2}
+    {id:'pce',name:'PCE',source:'fred',ticker:'DPCERV1Q225SBEA',unit:'%',decimals:2,rateSeries:'publishedRate',frequency:'quarterly',basisShort:'SAAR',basisDescription:'전분기 대비 연율(SAAR)'},
+    {id:'corepce',name:'근원 PCE',source:'fred',ticker:'DPCCRV1Q225SBEA',unit:'%',decimals:2,rateSeries:'publishedRate',frequency:'quarterly',basisShort:'SAAR',basisDescription:'전분기 대비 연율(SAAR)'}
   ]],
   ['CPI', [
-    {id:'cpi',name:'CPI',source:'fred',ticker:'CPIAUCSL',unit:'지수',decimals:2},
-    {id:'corecpi',name:'근원 CPI',source:'fred',ticker:'CPILFESL',unit:'지수',decimals:2}
+    {id:'cpi',name:'CPI',source:'fred',ticker:'CPIAUCNS',unit:'%',decimals:1,rateSeries:'yearOverYear',basisShort:'전년동월',basisDescription:'전년 동월 대비 · 비계절조정'},
+    {id:'corecpi',name:'근원 CPI',source:'fred',ticker:'CPILFENS',unit:'%',decimals:1,rateSeries:'yearOverYear',basisShort:'전년동월',basisDescription:'전년 동월 대비 · 비계절조정'}
   ]],
   ['PPI', [
-    {id:'ppi',name:'PPI',source:'fred',ticker:'PPIACO',unit:'지수',decimals:2},
-    {id:'coreppi',name:'근원 PPI',source:'fred',ticker:'WPSFD4131',unit:'지수',decimals:2}
+    {id:'ppi',name:'PPI',source:'fred',ticker:'PPIFIS',unit:'%',decimals:2,rateSeries:'publishedRate',basisShort:'전월',basisDescription:'전월 대비 · 계절조정'},
+    {id:'coreppi',name:'근원 PPI',source:'fred',ticker:'PPIFES',unit:'%',decimals:2,rateSeries:'publishedRate',basisShort:'전월',basisDescription:'식품·에너지 제외 · 전월 대비 · 계절조정'}
   ]],
   ['고용', [
     {id:'unrate',name:'실업률',source:'fred',ticker:'UNRATE',unit:'%',decimals:2},
@@ -84,6 +84,51 @@ function signed(value,decimals=2) {
 function dateLabel(date) {
   return new Date(`${date}T00:00:00Z`).toLocaleDateString('ko-KR',{timeZone:'UTC',year:'numeric',month:'2-digit',day:'2-digit'});
 }
+function itemDateLabel(item,date) {
+  if(item.frequency==='quarterly') {
+    const d=new Date(`${date}T00:00:00Z`);
+    return `${d.getUTCFullYear()}년 ${Math.floor(d.getUTCMonth()/3)+1}분기`;
+  }
+  return dateLabel(date);
+}
+function deriveRateSeries(item,rawValues) {
+  const monthKey=date=>date.slice(0,7);
+  const byMonth=new Map(rawValues.map(v=>[monthKey(v.date),v]));
+  if(item.rateSeries==='yearOverYear') {
+    return rawValues.map(v=>{
+      const d=new Date(`${v.date}T00:00:00Z`); d.setUTCFullYear(d.getUTCFullYear()-1);
+      const prior=byMonth.get(monthKey(d.toISOString().slice(0,10)));
+      if(!prior || prior.value===0) return null;
+      return {...v,value:(v.value/prior.value-1)*100};
+    }).filter(Boolean);
+  }
+  if(item.rateSeries==='monthOverMonth') {
+    return rawValues.map(v=>{
+      const d=new Date(`${v.date}T00:00:00Z`); d.setUTCMonth(d.getUTCMonth()-1);
+      const prior=byMonth.get(monthKey(d.toISOString().slice(0,10)));
+      if(!prior || prior.value===0) return null;
+      return {...v,value:(v.value/prior.value-1)*100};
+    }).filter(Boolean);
+  }
+  if(item.frequency==='quarterly') {
+    const quarters=new Map();
+    rawValues.forEach(v=>{
+      const d=new Date(`${v.date}T00:00:00Z`);
+      const year=d.getUTCFullYear(), quarter=Math.floor(d.getUTCMonth()/3)+1;
+      const key=`${year}-Q${quarter}`;
+      if(!quarters.has(key)) quarters.set(key,{year,quarter,values:[]});
+      quarters.get(key).values.push(v.value);
+    });
+    const averages=[...quarters.values()].filter(q=>q.values.length===3).sort((a,b)=>a.year-b.year||a.quarter-b.quarter).map(q=>({...q,average:q.values.reduce((a,b)=>a+b,0)/3}));
+    return averages.slice(1).map((q,i)=>{
+      const previous=averages[i].average;
+      const month=String(q.quarter*3).padStart(2,'0');
+      const date=`${q.year}-${month}-01`;
+      return {date,time:Math.floor(Date.parse(`${date}T00:00:00Z`)/1000),value:(Math.pow(q.average/previous,4)-1)*100};
+    });
+  }
+  return rawValues;
+}
 function proxyUrl(target) { return `${PROXY_BASE}/?url=${encodeURIComponent(target)}`; }
 
 function makeSummary() {
@@ -95,7 +140,7 @@ function makeSummary() {
       const chip=document.createElement('article'); chip.className='metric'; chip.dataset.summaryId=item.id;
       const top=document.createElement('div'); top.className='metric-top';
       const name=document.createElement('span'); name.className='metric-name'; name.textContent=item.name;
-      const source=document.createElement('span'); source.className='metric-source'; source.textContent=item.source==='fred'?'FRED':item.ticker;
+      const source=document.createElement('span'); source.className='metric-source'; source.textContent=item.basisShort || (item.source==='fred'?'FRED':item.ticker);
       top.append(name,source);
       const value=document.createElement('strong'); value.className='metric-value'; value.textContent='불러오는 중…';
       const change=document.createElement('span'); change.className='metric-change neutral'; change.textContent='—';
@@ -153,7 +198,9 @@ async function fetchFred(item) {
     return {time:Math.floor(Date.parse(`${date}T00:00:00Z`)/1000),value:item.transform?item.transform(normalized):normalized,date};
   }).filter(Boolean);
   if(values.length<2) throw new Error('FRED 관측값 부족');
-  return values;
+  const derived=item.rateSeries?deriveRateSeries(item,values):values;
+  if(derived.length<2) throw new Error(`${item.name} 변환 후 관측값 부족`);
+  return derived;
 }
 
 async function fetchTreasury(item) {
@@ -209,7 +256,8 @@ function renderItem(item,values) {
     summary.querySelector('.metric-value').textContent=shownValue(item,last.value);
     const change=summary.querySelector('.metric-change');
     const unit=item.unit==='%'?'%p':item.displayUnit?` ${item.displayUnit}`:item.unit==='지수'?'':` ${item.unit}`;
-    change.textContent=`${signed(delta,item.decimals)}${unit} · ${pct===null?blank:`${pct>0?'+':''}${fmt(pct,2)}%`} · ${dateLabel(last.date)}`;
+    const relativeChange=item.rateSeries?'':` · ${pct===null?blank:`${pct>0?'+':''}${fmt(pct,2)}%`}`;
+    change.textContent=`${signed(delta,item.decimals)}${unit}${relativeChange} · ${itemDateLabel(item,last.date)}`;
     change.className=`metric-change ${delta>0?'up':delta<0?'down':'neutral'}`;
   }
   if(!card) throw new Error(`차트 카드 요소를 찾을 수 없습니다: ${item.id}`);
@@ -219,9 +267,10 @@ function renderItem(item,values) {
   const footEl=card.querySelector('.chart-foot');
   if(!latestEl || !changeEl || !dateEl || !footEl) throw new Error(`차트 내부 요소가 누락되었습니다: ${item.id}`);
   latestEl.textContent=shownValue(item,last.value);
-  changeEl.textContent=`${signed(delta,item.decimals)}${item.unit==='%'?'%p':item.displayUnit?` ${item.displayUnit}`:item.unit==='지수'?'':` ${item.unit}`} · ${pct===null?blank:`${pct>0?'+':''}${fmt(pct,2)}%`}`;
+  const relativeChange=item.rateSeries?'':` · ${pct===null?blank:`${pct>0?'+':''}${fmt(pct,2)}%`}`;
+  changeEl.textContent=`${signed(delta,item.decimals)}${item.unit==='%'?'%p':item.displayUnit?` ${item.displayUnit}`:item.unit==='지수'?'':` ${item.unit}`}${relativeChange}`;
   changeEl.className=`chart-change ${delta>0?'up':delta<0?'down':'neutral'}`;
-  dateEl.textContent=`최근 관측일 ${dateLabel(last.date)} · 직전 관측 대비`;
+  dateEl.textContent=`최근 관측일 ${itemDateLabel(item,last.date)} · 직전 관측 대비`;
   const area=$(`chart-${item.id}`);
   if(!area) throw new Error(`차트 영역을 찾을 수 없습니다: ${item.id}`);
   area.innerHTML='';
@@ -237,7 +286,7 @@ function renderItem(item,values) {
   const series=chart.addLineSeries({color:delta>=0?'#d84a4a':'#3478d4',lineWidth:2,priceLineVisible:false,lastValueVisible:true,crosshairMarkerVisible:true});
   series.setData(values.map(v=>({time:v.time,value:v.value}))); 
   chart.timeScale().fitContent(); charts.set(item.id,{chart,area});
-  footEl.textContent=`${item.ticker} · ${values.length.toLocaleString('ko-KR')}개 관측값 · ${dateLabel(values[0].date)} ~ ${dateLabel(last.date)}`;
+  footEl.textContent=`${item.ticker} · ${item.basisDescription || '원자료'} · ${values.length.toLocaleString('ko-KR')}개 관측값 · ${itemDateLabel(item,values[0].date)} ~ ${itemDateLabel(item,last.date)}`;
 }
 
 async function refreshAll() {
