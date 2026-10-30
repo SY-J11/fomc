@@ -36,8 +36,8 @@ const rows = [
   ]],
   ['임금·실업수당', [
     {id:'wage',name:'시간당 평균 임금',source:'fred',ticker:'CES0500000003',unit:'달러',decimals:2},
-    {id:'icsa',name:'신규 실업수당 청구건수',source:'fred',ticker:'ICSA',unit:'건',decimals:0,normalizeClaims:true},
-    {id:'ccsa',name:'계속 실업수당 청구건수',source:'fred',ticker:'CCSA',unit:'건',decimals:0,normalizeClaims:true}
+    {id:'icsa',name:'신규 실업수당 청구건수',source:'fred',ticker:'ICSA',unit:'건',decimals:0},
+    {id:'ccsa',name:'계속 실업수당 청구건수',source:'fred',ticker:'CCSA',unit:'건',decimals:0}
   ]],
   ['구인·참가율', [
     {id:'jolts',name:'JOLTS 구인건수',source:'fred',ticker:'JTSJOL',unit:'천 건',decimals:0},
@@ -151,7 +151,7 @@ async function fetchFred(item) {
     const parts=line.split(','); const date=(parts[0]||'').trim(); const raw=(parts[1]||'').trim();
     const value=raw==='.'||raw===''?NaN:Number(raw);
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(value)) return null;
-    const normalized=item.normalizeClaims?value/1000:value;
+    const normalized=value; // ICSA·CCSA는 이미 건 단위 원자료이므로 추가로 1,000으로 나누지 않습니다.
     return {time:Math.floor(Date.parse(`${date}T00:00:00Z`)/1000),value:item.transform?item.transform(normalized):normalized,date};
   }).filter(Boolean);
   if(values.length<2) throw new Error('FRED 관측값 부족');
