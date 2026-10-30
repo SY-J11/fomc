@@ -30,8 +30,8 @@ const rows = [
     {id:'corecpi',name:'근원 CPI',source:'fred',ticker:'CPILFENS',unit:'%',decimals:1,rateSeries:'yearOverYear',basisShort:'전년동월',basisDescription:'전년 동월 대비 · 비계절조정'}
   ]],
   ['PPI', [
-    {id:'ppi',name:'PPI',source:'fred',ticker:'PPIFIS',unit:'%',decimals:2,rateSeries:'publishedRate',basisShort:'전월',basisDescription:'전월 대비 · 계절조정'},
-    {id:'coreppi',name:'근원 PPI',source:'fred',ticker:'PPIFES',unit:'%',decimals:2,rateSeries:'publishedRate',basisShort:'전월',basisDescription:'식품·에너지 제외 · 전월 대비 · 계절조정'}
+    {id:'ppi',name:'PPI',source:'fred',ticker:'PPIFIS',unit:'%',decimals:2,rateSeries:'monthOverMonth',basisShort:'전월',basisDescription:'전월 대비 · 계절조정'},
+    {id:'coreppi',name:'근원 PPI',source:'fred',ticker:'PPIFES',unit:'%',decimals:2,rateSeries:'monthOverMonth',basisShort:'전월',basisDescription:'식품·에너지 제외 · 전월 대비 · 계절조정'}
   ]],
   ['고용', [
     {id:'unrate',name:'실업률',source:'fred',ticker:'UNRATE',unit:'%',decimals:2},
@@ -107,7 +107,7 @@ function deriveRateSeries(item,rawValues) {
       const d=new Date(`${v.date}T00:00:00Z`); d.setUTCMonth(d.getUTCMonth()-1);
       const prior=byMonth.get(monthKey(d.toISOString().slice(0,10)));
       if(!prior || prior.value===0) return null;
-      return {...v,value:(v.value/prior.value-1)*100};
+      return {...v,value:Number(((v.value/prior.value-1)*100).toFixed(1))};
     }).filter(Boolean);
   }
   // DPCERV1Q225SBEA / DPCCRV1Q225SBEA are already published quarterly
