@@ -37,9 +37,14 @@ const rows = [
     {id:'unrate',name:'실업률',source:'fred',ticker:'UNRATE',unit:'%',decimals:2},
     {id:'payems',name:'비농업 고용자 수',source:'fred',ticker:'PAYEMS',unit:'천 명',decimals:0,scale:0.001,displayUnit:'백만 명'}
   ]],
-  ['임금·실업수당', [
+  ['시간당 평균 임금', [
     {id:'wage',name:'시간당 평균 임금',source:'fred',ticker:'CES0500000003',unit:'달러',decimals:2},
-    {id:'icsa',name:'신규 실업수당 청구건수',source:'fred',ticker:'ICSA',unit:'건',decimals:0},
+    {id:'wageyoy',name:'전년 대비 상승률 (Average Hourly Earnings)',source:'fred',ticker:'CES0500000003',unit:'%',decimals:2,rateSeries:'yearOverYear',basisShort:'전년 대비',basisDescription:'Average Hourly Earnings · 전년 대비'}
+  ]],
+  ['신규 실업수당 청구건수', [
+    {id:'icsa',name:'신규 실업수당 청구건수',source:'fred',ticker:'ICSA',unit:'건',decimals:0}
+  ]],
+  ['계속 실업수당 청구건수', [
     {id:'ccsa',name:'계속 실업수당 청구건수',source:'fred',ticker:'CCSA',unit:'건',decimals:0}
   ]],
   ['구인·참가율', [
