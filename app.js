@@ -7,7 +7,8 @@ const blank = '—';
 
 const rows = [
   ['기준금리', [
-    {id:'fedfunds',name:'기준금리',source:'fred',ticker:'FEDFUNDS',unit:'%',decimals:2}
+    {id:'fedupper',name:'기준금리 (Upper-Limit)',source:'fred',ticker:'DFEDTARU',unit:'%',decimals:2},
+    {id:'fedlower',name:'기준금리 (Lower-Limit)',source:'fred',ticker:'DFEDTARL',unit:'%',decimals:2}
   ]],
   ['국채금리', [
     {id:'us2y',name:'2년물 국채금리',source:'treasury',treasuryField:'BC_2YEAR',unit:'%',decimals:3},
@@ -15,8 +16,10 @@ const rows = [
     {id:'us30y',name:'30년물 국채금리',source:'treasury',treasuryField:'BC_30YEAR',unit:'%',decimals:3}
   ]],
   ['기대 인플레이션', [
+    {id:'t1yie',name:'1년 기대 인플레이션',source:'fred',ticker:'EXPINF1YR',unit:'%',decimals:2},
     {id:'t5yie',name:'5년 기대 인플레이션',source:'fred',ticker:'T5YIE',unit:'%',decimals:2},
-    {id:'t10yie',name:'10년 기대 인플레이션',source:'fred',ticker:'T10YIE',unit:'%',decimals:2}
+    {id:'t10yie',name:'10년 기대 인플레이션',source:'fred',ticker:'T10YIE',unit:'%',decimals:2},
+    {id:'t5yifr',name:'5년 후 5년 기대 인플레이션',source:'fred',ticker:'T5YIFR',unit:'%',decimals:2}
   ]],
   ['PCE', [
     {id:'pce',name:'PCE',source:'fred',ticker:'PCEPI',unit:'지수',decimals:2},
@@ -60,11 +63,6 @@ const rows = [
     {id:'dxy',name:'달러 인덱스',source:'yahoo',ticker:'DX-Y.NYB',unit:'지수',decimals:2},
     {id:'fedfuture',name:'기준금리 선물 내재금리',source:'yahoo',ticker:'ZQ=F',unit:'%',decimals:2,transform:v=>100-v}
   ]],
-  ['미시간대 기대 인플레이션', [
-    {id:'mich1y',name:'미시간대 1년 기대인플레이션',source:'fred',ticker:'MICH',unit:'%',decimals:2},
-    {id:'mich5y',name:'5년 기대인플레이션 (Cleveland Fed 대체지표)',source:'fred',ticker:'EXPINF5YR',unit:'%',decimals:2},
-    {id:'mich10y',name:'10년 기대인플레이션 (10년 BEI 대체지표)',source:'fred',ticker:'T10YIE',unit:'%',decimals:2}
-  ]]
 ];
 const all = rows.flatMap((row, rowIndex) => row[1].map(item => ({...item,group:row[0],rowIndex})));
 const charts = new Map();
@@ -92,7 +90,7 @@ function makeSummary() {
   const root=$('summaryRows'); root.innerHTML='';
   rows.forEach(([group,items],index)=>{
     const line=document.createElement('div'); line.className='summary-row';
-    const metrics=document.createElement('div'); metrics.className=`metrics ${items.length===1?'single':items.length===2?'double':'triple'}`;
+    const metrics=document.createElement('div'); metrics.className=`metrics ${items.length===1?'single':items.length===2?'double':items.length===4?'quadruple':'triple'}`;
     items.forEach(item=>{
       const chip=document.createElement('article'); chip.className='metric'; chip.dataset.summaryId=item.id;
       const top=document.createElement('div'); top.className='metric-top';
