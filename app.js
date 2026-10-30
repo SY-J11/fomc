@@ -16,7 +16,7 @@ const rows = [
     {id:'us30y',name:'30년물 국채금리',source:'treasury',treasuryField:'BC_30YEAR',unit:'%',decimals:3}
   ]],
   ['기대 인플레이션', [
-    {id:'t1yie',name:'1년 기대 인플레이션',source:'fred',ticker:'T1YIE',unit:'%',decimals:2},
+    {id:'t1yie',name:'1년 기대 인플레이션',source:'fred',ticker:'EXPINF1YR',unit:'%',decimals:2},
     {id:'t5yie',name:'5년 기대 인플레이션',source:'fred',ticker:'T5YIE',unit:'%',decimals:2},
     {id:'t10yie',name:'10년 기대 인플레이션',source:'fred',ticker:'T10YIE',unit:'%',decimals:2},
     {id:'t5yifr',name:'5년 후 5년 기대 인플레이션',source:'fred',ticker:'T5YIFR',unit:'%',decimals:2}
