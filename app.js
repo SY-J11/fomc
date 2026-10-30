@@ -110,6 +110,10 @@ function deriveRateSeries(item,rawValues) {
       return {...v,value:(v.value/prior.value-1)*100};
     }).filter(Boolean);
   }
+  // DPCERV1Q225SBEA / DPCCRV1Q225SBEA are already published quarterly
+  // percent-change-at-annual-rate series. Do not average monthly values or
+  // annualize them a second time; each FRED observation is one quarter's rate.
+  if(item.rateSeries==='publishedRate') return rawValues;
   if(item.frequency==='quarterly') {
     const quarters=new Map();
     rawValues.forEach(v=>{
