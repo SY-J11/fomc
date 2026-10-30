@@ -36,8 +36,8 @@ const rows = [
   ]],
   ['임금·실업수당', [
     {id:'wage',name:'시간당 평균 임금',source:'fred',ticker:'CES0500000003',unit:'달러',decimals:2},
-    {id:'icsa',name:'신규 실업수당 청구건수',source:'fred',ticker:'ICSA',unit:'건',decimals:0,scale:0.001,displayUnit:'건'},
-    {id:'ccsa',name:'계속 실업수당 청구건수',source:'fred',ticker:'CCSA',unit:'건',decimals:0,scale:0.001,displayUnit:'건'}
+    {id:'icsa',name:'신규 실업수당 청구건수',source:'fred',ticker:'ICSA',unit:'건',decimals:0,normalizeClaims:true},
+    {id:'ccsa',name:'계속 실업수당 청구건수',source:'fred',ticker:'CCSA',unit:'건',decimals:0,normalizeClaims:true}
   ]],
   ['구인·참가율', [
     {id:'jolts',name:'JOLTS 구인건수',source:'fred',ticker:'JTSJOL',unit:'천 건',decimals:0},
@@ -75,7 +75,7 @@ function fmt(value, decimals=2) {
   return value.toLocaleString('ko-KR',{minimumFractionDigits:decimals,maximumFractionDigits:decimals});
 }
 function shownValue(item,value) {
-  const n = item.scale ? value * item.scale : value;
+  const n = value;
   const unit = item.displayUnit || item.unit;
   return `${fmt(n,item.decimals)}${unit==='%'?'%':unit==='지수'?'':` ${unit}`}`;
 }
@@ -151,7 +151,8 @@ async function fetchFred(item) {
     const parts=line.split(','); const date=(parts[0]||'').trim(); const raw=(parts[1]||'').trim();
     const value=raw==='.'||raw===''?NaN:Number(raw);
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(value)) return null;
-    return {time:Math.floor(Date.parse(`${date}T00:00:00Z`)/1000),value:item.transform?item.transform(value):value,date};
+    const normalized=item.normalizeClaims?value/1000:value;
+    return {time:Math.floor(Date.parse(`${date}T00:00:00Z`)/1000),value:item.transform?item.transform(normalized):normalized,date};
   }).filter(Boolean);
   if(values.length<2) throw new Error('FRED 관측값 부족');
   return values;
@@ -176,9 +177,8 @@ async function fetchYahoo(item) {
 
 function renderItem(item,values) {
   const last=values[values.length-1],prev=values[values.length-2];
-  const scale=item.scale||1;
   const deltaRaw=last.value-prev.value;
-  const delta=deltaRaw*scale;
+  const delta=deltaRaw;
   const pct=prev.value!==0?deltaRaw/Math.abs(prev.value)*100:null;
   const card=chartCards.get(item.id);
   const summary=document.querySelector(`[data-summary-id="${item.id}"]`);
@@ -212,7 +212,7 @@ function renderItem(item,values) {
     localization:{locale:'ko-KR',priceFormatter:v=>fmt(v,item.decimals)}
   });
   const series=chart.addLineSeries({color:delta>=0?'#d84a4a':'#3478d4',lineWidth:2,priceLineVisible:false,lastValueVisible:true,crosshairMarkerVisible:true});
-  series.setData(values.map(v=>({time:v.time,value:v.value*scale})));
+  series.setData(values.map(v=>({time:v.time,value:v.value}))); 
   chart.timeScale().fitContent(); charts.set(item.id,{chart,area});
   footEl.textContent=`${item.ticker} · ${values.length.toLocaleString('ko-KR')}개 관측값 · ${dateLabel(values[0].date)} ~ ${dateLabel(last.date)}`;
 }
