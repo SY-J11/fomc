@@ -1,7 +1,7 @@
 'use strict';
 
 // FRED 시계열과 Yahoo Finance 일봉 데이터를 직접 받아 요약·차트를 그립니다.
-const PROXY_BASE = 'https://fomc.mcraft-tiger-574.workers.dev/';
+const PROXY_BASE = 'https://fomc.mcraft-tiger-574.workers.dev';
 const $ = id => document.getElementById(id);
 const blank = '—';
 
@@ -68,6 +68,7 @@ const rows = [
 ];
 const all = rows.flatMap((row, rowIndex) => row[1].map(item => ({...item,group:row[0],rowIndex})));
 const charts = new Map();
+const chartCards = new Map();
 
 function fmt(value, decimals=2) {
   if (!Number.isFinite(value)) return blank;
@@ -125,7 +126,7 @@ function makeCharts() {
       quote.innerHTML='<strong class="chart-latest">—</strong><span class="chart-change neutral">데이터 조회 중</span><small class="chart-date"></small>';
       const area=document.createElement('div'); area.className='chart-area'; area.id=`chart-${item.id}`;
       const foot=document.createElement('div'); foot.className='chart-foot'; foot.textContent=`${item.ticker} · ${item.source==='fred'?'FRED':'Yahoo Finance'}`;
-      card.append(head,quote,area,foot); grid.append(card); item.card=card;
+      card.append(head,quote,area,foot); grid.append(card); chartCards.set(item.id,card);
     });
     section.append(heading,grid); root.append(section);
   });
@@ -140,10 +141,14 @@ async function fetchFred(item) {
     try{detail=(await response.text()).slice(0,220);}catch{}
     throw new Error(`FRED 데이터 연결 HTTP ${response.status}${detail?`: ${detail}`:''}`);
   }
-  const csv=await response.text();
-  if(!csv.includes('observation_date') || csv.trim().startsWith('<')) throw new Error('FRED CSV 응답 형식 오류');
-  const values=csv.trim().split(/\r?\n/).slice(1).map(line=>{
-    const parts=line.split(','); const date=parts[0]; const raw=(parts[1]||'').trim();
+  const csv=(await response.text()).replace(/^\uFEFF/,'').trim();
+  if(!/^observation_date,/i.test(csv)) {
+    let detail=csv.slice(0,260).replace(/\s+/g,' ');
+    try { const payload=JSON.parse(csv); detail=payload.error || payload.message || payload.detail || JSON.stringify(payload).slice(0,220); } catch {}
+    throw new Error(`FRED CSV 형식이 아닙니다: ${detail || '빈 응답'} · Worker의 /fred.csv 경로 및 배포 버전을 확인하세요`);
+  }
+  const values=csv.split(/\r?\n/).slice(1).map(line=>{
+    const parts=line.split(','); const date=(parts[0]||'').trim(); const raw=(parts[1]||'').trim();
     const value=raw==='.'||raw===''?NaN:Number(raw);
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(value)) return null;
     return {time:Math.floor(Date.parse(`${date}T00:00:00Z`)/1000),value:item.transform?item.transform(value):value,date};
@@ -172,7 +177,7 @@ async function fetchYahoo(item) {
 function renderItem(item,values) {
   const last=values[values.length-1],prev=values[values.length-2];
   const delta=last.value-prev.value; const pct=prev.value!==0?delta/Math.abs(prev.value)*100:null;
-  const card=item.card;
+  const card=chartCards.get(item.id);
   const summary=document.querySelector(`[data-summary-id="${item.id}"]`);
   if(summary){
     summary.querySelector('.metric-value').textContent=shownValue(item,last.value);
@@ -181,12 +186,19 @@ function renderItem(item,values) {
     change.textContent=`${signed(delta,item.decimals)}${unit} · ${pct===null?blank:`${pct>0?'+':''}${fmt(pct,2)}%`} · ${dateLabel(last.date)}`;
     change.className=`metric-change ${delta>0?'up':delta<0?'down':'neutral'}`;
   }
-  card.querySelector('.chart-latest').textContent=shownValue(item,last.value);
+  if(!card) throw new Error(`차트 카드 요소를 찾을 수 없습니다: ${item.id}`);
+  const latestEl=card.querySelector('.chart-latest');
   const changeEl=card.querySelector('.chart-change');
+  const dateEl=card.querySelector('.chart-date');
+  const footEl=card.querySelector('.chart-foot');
+  if(!latestEl || !changeEl || !dateEl || !footEl) throw new Error(`차트 내부 요소가 누락되었습니다: ${item.id}`);
+  latestEl.textContent=shownValue(item,last.value);
   changeEl.textContent=`${signed(delta,item.decimals)}${item.unit==='%'?'%p':item.unit==='지수'?'':` ${item.unit}`} · ${pct===null?blank:`${pct>0?'+':''}${fmt(pct,2)}%`}`;
   changeEl.className=`chart-change ${delta>0?'up':delta<0?'down':'neutral'}`;
-  card.querySelector('.chart-date').textContent=`최근 관측일 ${dateLabel(last.date)} · 직전 관측 대비`;
-  const area=$(`chart-${item.id}`); area.innerHTML='';
+  dateEl.textContent=`최근 관측일 ${dateLabel(last.date)} · 직전 관측 대비`;
+  const area=$(`chart-${item.id}`);
+  if(!area) throw new Error(`차트 영역을 찾을 수 없습니다: ${item.id}`);
+  area.innerHTML='';
   if(!window.LightweightCharts){area.textContent='차트 라이브러리를 불러오지 못했습니다.';return;}
   const chart=LightweightCharts.createChart(area,{
     width:area.clientWidth||320,height:220,
@@ -199,7 +211,7 @@ function renderItem(item,values) {
   const series=chart.addLineSeries({color:delta>=0?'#d84a4a':'#3478d4',lineWidth:2,priceLineVisible:false,lastValueVisible:true,crosshairMarkerVisible:true});
   series.setData(values.map(v=>({time:v.time,value:v.value})));
   chart.timeScale().fitContent(); charts.set(item.id,{chart,area});
-  card.querySelector('.chart-foot').textContent=`${item.ticker} · ${values.length.toLocaleString('ko-KR')}개 관측값 · ${dateLabel(values[0].date)} ~ ${dateLabel(last.date)}`;
+  footEl.textContent=`${item.ticker} · ${values.length.toLocaleString('ko-KR')}개 관측값 · ${dateLabel(values[0].date)} ~ ${dateLabel(last.date)}`;
 }
 
 async function refreshAll() {
@@ -211,7 +223,19 @@ async function refreshAll() {
     while(cursor<queue.length){
       const item=queue[cursor++];
       try{const values=item.source==='fred'?await fetchFred(item):await fetchYahoo(item);renderItem(item,values);success++;}
-      catch(error){fail++;const summary=document.querySelector(`[data-summary-id="${item.id}"]`);if(summary){summary.querySelector('.metric-value').textContent='자료 없음';summary.querySelector('.metric-change').textContent=String(error.message||error);summary.querySelector('.metric-change').className='metric-change neutral';}const area=$(`chart-${item.id}`);area.innerHTML=`<div class="chart-error">${item.name} 그래프를 불러오지 못했습니다.<small>${String(error.message||error).slice(0,100)}</small></div>`;}
+      catch(error){
+        fail++;
+        const message=String(error?.message||error);
+        const summary=document.querySelector(`[data-summary-id="${item.id}"]`);
+        if(summary){
+          const valueEl=summary.querySelector('.metric-value');
+          const changeEl=summary.querySelector('.metric-change');
+          if(valueEl) valueEl.textContent='자료 없음';
+          if(changeEl){changeEl.textContent=message;changeEl.className='metric-change neutral';}
+        }
+        const area=$(`chart-${item.id}`);
+        if(area) area.innerHTML=`<div class="chart-error">${item.name} 그래프를 불러오지 못했습니다.<small>${message.slice(0,160)}</small></div>`;
+      }
     }
   }
   await Promise.all([worker(),worker(),worker(),worker(),worker(),worker()]);
