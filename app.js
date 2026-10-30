@@ -36,8 +36,8 @@ const rows = [
   ]],
   ['임금·실업수당', [
     {id:'wage',name:'시간당 평균 임금',source:'fred',ticker:'CES0500000003',unit:'달러',decimals:2},
-    {id:'icsa',name:'신규 실업수당 청구건수',source:'fred',ticker:'ICSA',unit:'건',decimals:0,scale:1000,displayUnit:'천 건'},
-    {id:'ccsa',name:'계속 실업수당 청구건수',source:'fred',ticker:'CCSA',unit:'건',decimals:0,scale:1000,displayUnit:'천 건'}
+    {id:'icsa',name:'신규 실업수당 청구건수',source:'fred',ticker:'ICSA',unit:'건',decimals:0,scale:0.001,displayUnit:'건'},
+    {id:'ccsa',name:'계속 실업수당 청구건수',source:'fred',ticker:'CCSA',unit:'건',decimals:0,scale:0.001,displayUnit:'건'}
   ]],
   ['구인·참가율', [
     {id:'jolts',name:'JOLTS 구인건수',source:'fred',ticker:'JTSJOL',unit:'천 건',decimals:0},
@@ -176,7 +176,10 @@ async function fetchYahoo(item) {
 
 function renderItem(item,values) {
   const last=values[values.length-1],prev=values[values.length-2];
-  const delta=last.value-prev.value; const pct=prev.value!==0?delta/Math.abs(prev.value)*100:null;
+  const scale=item.scale||1;
+  const deltaRaw=last.value-prev.value;
+  const delta=deltaRaw*scale;
+  const pct=prev.value!==0?deltaRaw/Math.abs(prev.value)*100:null;
   const card=chartCards.get(item.id);
   const summary=document.querySelector(`[data-summary-id="${item.id}"]`);
   if(summary){
@@ -193,7 +196,7 @@ function renderItem(item,values) {
   const footEl=card.querySelector('.chart-foot');
   if(!latestEl || !changeEl || !dateEl || !footEl) throw new Error(`차트 내부 요소가 누락되었습니다: ${item.id}`);
   latestEl.textContent=shownValue(item,last.value);
-  changeEl.textContent=`${signed(delta,item.decimals)}${item.unit==='%'?'%p':item.unit==='지수'?'':` ${item.unit}`} · ${pct===null?blank:`${pct>0?'+':''}${fmt(pct,2)}%`}`;
+  changeEl.textContent=`${signed(delta,item.decimals)}${item.unit==='%'?'%p':item.displayUnit?` ${item.displayUnit}`:item.unit==='지수'?'':` ${item.unit}`} · ${pct===null?blank:`${pct>0?'+':''}${fmt(pct,2)}%`}`;
   changeEl.className=`chart-change ${delta>0?'up':delta<0?'down':'neutral'}`;
   dateEl.textContent=`최근 관측일 ${dateLabel(last.date)} · 직전 관측 대비`;
   const area=$(`chart-${item.id}`);
@@ -209,7 +212,7 @@ function renderItem(item,values) {
     localization:{locale:'ko-KR',priceFormatter:v=>fmt(v,item.decimals)}
   });
   const series=chart.addLineSeries({color:delta>=0?'#d84a4a':'#3478d4',lineWidth:2,priceLineVisible:false,lastValueVisible:true,crosshairMarkerVisible:true});
-  series.setData(values.map(v=>({time:v.time,value:v.value})));
+  series.setData(values.map(v=>({time:v.time,value:v.value*scale})));
   chart.timeScale().fitContent(); charts.set(item.id,{chart,area});
   footEl.textContent=`${item.ticker} · ${values.length.toLocaleString('ko-KR')}개 관측값 · ${dateLabel(values[0].date)} ~ ${dateLabel(last.date)}`;
 }
