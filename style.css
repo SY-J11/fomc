@@ -6,3 +6,9 @@
 .claims-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}
 .claims-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
 @media(max-width:380px){.claims-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}.claims-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.claims-metrics .metric{display:flex;flex-direction:column;align-items:stretch}.claims-metrics .metric-change{text-align:left}}
+
+
+/* 소비·심리: 요약은 두 지표씩 두 줄, 그래프는 항상 2열 */
+.consumer-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+.consumer-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+@media(max-width:380px){.consumer-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}.consumer-metrics .metric{display:flex;flex-direction:column;align-items:stretch}.consumer-metrics .metric-change{text-align:left}}

@@ -59,6 +59,7 @@ const rows = [
   ]],
   ['소비·심리', [
     {id:'rsafs',name:'소매판매',source:'fred',ticker:'RSAFS',unit:'백만 달러',decimals:0,scale:0.001,displayUnit:'십억 달러'},
+    {id:'retailmom',name:'소매판매 전월 대비',source:'fred',ticker:'MARTSMPCSM44X72USS',unit:'%',decimals:2,rateSeries:'publishedRate',basisShort:'전월 대비',basisDescription:'미국 Census Bureau · 계절조정 · 전월 대비'},
     {id:'income',name:'개인소득',source:'fred',ticker:'PI',unit:'십억 달러',decimals:0,scale:0.001,displayUnit:'조 달러'},
     {id:'umcsent',name:'미시간대 소비자심리지수',source:'fred',ticker:'UMCSENT',unit:'지수',decimals:1}
   ]],
@@ -140,20 +141,25 @@ function proxyUrl(target) { return `${PROXY_BASE}/?url=${encodeURIComponent(targ
 
 function makeSummary() {
   const root=$('summaryRows'); root.innerHTML='';
-  rows.forEach(([group,items],index)=>{
-    const line=document.createElement('div'); line.className='summary-row';
-    const metrics=document.createElement('div'); metrics.className=`metrics ${items.length===1?'single':items.length===2?'double':items.length===4?'quadruple':'triple'}${group==='실업수당 청구건수'?' claims-metrics':''}`;
-    items.forEach(item=>{
-      const chip=document.createElement('article'); chip.className='metric'; chip.dataset.summaryId=item.id;
-      const top=document.createElement('div'); top.className='metric-top';
-      const name=document.createElement('span'); name.className='metric-name'; name.textContent=item.name;
-      const source=document.createElement('span'); source.className='metric-source'; source.textContent=item.basisShort || (item.source==='fred'?'FRED':item.ticker);
-      top.append(name,source);
-      const value=document.createElement('strong'); value.className='metric-value'; value.textContent='불러오는 중…';
-      const change=document.createElement('span'); change.className='metric-change neutral'; change.textContent='—';
-      chip.append(top,value,change); metrics.append(chip);
+  rows.forEach(([group,items])=>{
+    // 소비·심리는 [소매판매, 전월 대비], [개인소득, 소비자심리] 두 줄로 구성합니다.
+    const chunks=group==='소비·심리'?[items.slice(0,2),items.slice(2)]:[items];
+    chunks.forEach(chunk=>{
+      const line=document.createElement('div'); line.className='summary-row';
+      const metrics=document.createElement('div');
+      metrics.className=`metrics ${chunk.length===1?'single':chunk.length===2?'double':chunk.length===4?'quadruple':'triple'}${group==='실업수당 청구건수'?' claims-metrics':''}${group==='소비·심리'?' consumer-metrics':''}`;
+      chunk.forEach(item=>{
+        const chip=document.createElement('article'); chip.className='metric'; chip.dataset.summaryId=item.id;
+        const top=document.createElement('div'); top.className='metric-top';
+        const name=document.createElement('span'); name.className='metric-name'; name.textContent=item.name;
+        const source=document.createElement('span'); source.className='metric-source'; source.textContent=item.basisShort || (item.source==='fred'?'FRED':item.ticker);
+        top.append(name,source);
+        const value=document.createElement('strong'); value.className='metric-value'; value.textContent='불러오는 중…';
+        const change=document.createElement('span'); change.className='metric-change neutral'; change.textContent='—';
+        chip.append(top,value,change); metrics.append(chip);
+      });
+      line.append(metrics); root.append(line);
     });
-    line.append(metrics); root.append(line);
   });
 }
 
@@ -163,7 +169,7 @@ function makeCharts() {
     const section=document.createElement('section'); section.className='chart-group';
     const heading=document.createElement('div'); heading.className='section-heading group-heading';
     heading.innerHTML=`<div><span class="eyebrow">INDICATOR GROUP ${String(index+1).padStart(2,'0')}</span><h2>${group}</h2></div>`;
-    const grid=document.createElement('div'); grid.className=`chart-grid${group==='실업수당 청구건수'?' claims-grid':''}`;
+    const grid=document.createElement('div'); grid.className=`chart-grid${group==='실업수당 청구건수'?' claims-grid':''}${group==='소비·심리'?' consumer-grid':''}`;
     items.forEach(item=>{
       const card=document.createElement('article'); card.className='chart-card';
       const head=document.createElement('div'); head.className='chart-head';
